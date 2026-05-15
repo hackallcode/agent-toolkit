@@ -1,0 +1,13 @@
+{
+  "name": "agent-toolkit",
+  "owner": {
+    "name": "Vladimir Severov"
+  },
+  "plugins": [
+    {
+      "name": "hacode-skills",
+      "source": "./",
+      "description": "Скилы режимов работы агента (BUILD, CHECK, DOCS, UI, REVIEW, CLEANUP) поверх инструкций agent-toolkit."
+    }
+  ]
+}

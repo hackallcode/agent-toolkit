@@ -1,0 +1,20 @@
+{
+  "name": "agent-toolkit",
+  "interface": {
+    "displayName": "Hacode Skills"
+  },
+  "plugins": [
+    {
+      "name": "hacode-skills",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

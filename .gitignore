@@ -1,0 +1,24 @@
+# Project
+.env
+
+# JetBrains
+.idea/*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+*.icloud
+
+# VSCode
+.vscode/*
+.history/
+*.vsix
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Собирается из modes/** командой `make skills/build`
+/skills/
