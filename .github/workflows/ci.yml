@@ -1,12 +1,4 @@
-# skills/** в основной ветке не хранится - он собирается из modes/** и публикуется в ветку `dist`,
-# откуда плагин ставится по URL одной командой. Основная ветка остаётся источником, `dist` - сборкой.
-#
-# Публикация пишет в репозиторий, и токен для неё GitHub Actions выдаёт сам: `GITHUB_TOKEN`
-# с `permissions: contents: write` пушит в ветки того же репозитория, отдельный PAT не нужен.
-# Единственное ограничение - пуш от `GITHUB_TOKEN` не запускает новых workflow, поэтому по `dist`
-# пайплайн не побежит; проверок у ветки нет и не надо. Коммитера подписывают переменные
-# `SKILLS_PUBLISH_NAME` и `SKILLS_PUBLISH_EMAIL` (Settings → Secrets and variables → Actions →
-# Variables), без них коммитит `github-actions[bot]`. Подробности - CONTRIBUTING.md, «Ветка `dist`».
+# skills/** is built from modes/** and published to `dist`, the branch the plugin installs from (CONTRIBUTING.md, «Ветка `dist`»).
 
 name: ci
 
@@ -29,13 +21,12 @@ permissions:
   contents: read
 
 jobs:
-  # Сборка ломается молча: `dist` уедет без скилов, а установка притащит пустой плагин.
-  # Поэтому собираем в каждом PR и на каждом пуше в основную ветку, а не только перед публикацией.
+  # A broken build fails silently as an empty plugin, so it is checked on every PR, not only before publishing.
   check-skills:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: ./scripts/build-skills.py
@@ -44,14 +35,12 @@ jobs:
       - run: python -m py_compile scripts/*.py scripts/mr_watch/*.py
       - run: bash -n scripts/mr-reply.sh
 
-  # Скрипт не только описывает правила треда, но и отказывает по ним. Отказ - это поведение,
-  # и проверяется он на подменённом `glab`, без похода в GitLab. `jq` и `gawk` уже стоят
-  # на образе `ubuntu-latest`.
+  # The tests fake `glab`; `jq` and `gawk` come with the runner image.
   test-scripts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: pip install --quiet pytest pyyaml
@@ -59,8 +48,7 @@ jobs:
 
   publish-skills:
     needs: [check-skills, test-scripts]
-    # Пуш в основную ветку публикует боевую `dist`; ручной запуск с галкой `publish` -
-    # способ проверить публикацию до мержа, а `dist_branch` уводит прогон на другую ветку.
+    # A manual run with `publish` checks publishing before merge; `dist_branch` keeps it off the live `dist`.
     if: github.event_name == 'push' || inputs.publish
     permissions:
       contents: write
@@ -68,20 +56,21 @@ jobs:
     env:
       DIST_BRANCH: ${{ inputs.dist_branch || 'dist' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          # Патч версии - число коммитов, shallow-клон его обрезает.
+          # The version patch is the commit count, which a shallow clone truncates.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: ./scripts/build-skills.py --stamp-version
       - run: |
           git config user.name "${SKILLS_PUBLISH_NAME:-github-actions[bot]}"
           git config user.email "${SKILLS_PUBLISH_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
-          # Ветка сборки - не история: она каждый раз переписывается поверх текущей основной ветки.
+          # A force-push to the source branch would replace it with a build.
+          [ "$DIST_BRANCH" != "$DEFAULT_BRANCH" ] || { echo "::error::dist_branch must not be $DEFAULT_BRANCH"; exit 1; }
           git checkout -B "$DIST_BRANCH"
-          # skills/ лежит в .gitignore - в сборке он нужен, поэтому добавляем принудительно.
+          # skills/ is gitignored in the source branch.
           git add -f skills .claude-plugin/plugin.json .codex-plugin/plugin.json
           git commit --no-gpg-sign -m "Build skills from ${GITHUB_SHA::7}"
           git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$DIST_BRANCH"
@@ -89,3 +78,4 @@ jobs:
           SKILLS_PUBLISH_NAME: ${{ vars.SKILLS_PUBLISH_NAME }}
           SKILLS_PUBLISH_EMAIL: ${{ vars.SKILLS_PUBLISH_EMAIL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}

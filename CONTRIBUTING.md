@@ -67,7 +67,8 @@ python -m pytest tests -q
 (`fetch-depth: 0`).
 
 Проверить публикацию до мержа: ручной запуск workflow с галкой `publish`, а вход `dist_branch`
-уводит прогон на другую ветку, чтобы не трогать боевую.
+уводит прогон на другую ветку, чтобы не трогать боевую. Основную ветку как `dist_branch` джоба не
+примет: форспуш заменил бы её сборкой.
 
 ```
 gh workflow run ci.yml --ref <ветка> -f publish=true -f dist_branch=dist-test
