@@ -15,7 +15,7 @@ on:
       dist_branch:
         description: 'Branch to publish to'
         type: string
-        default: dist
+        default: dist-test
 
 permissions:
   contents: read
@@ -50,6 +50,10 @@ jobs:
     needs: [check-skills, test-scripts]
     # A manual run with `publish` checks publishing before merge; `dist_branch` keeps it off the live `dist`.
     if: github.event_name == 'push' || inputs.publish
+    # Queued, not cancelled: the newest build lands last and its version is the highest.
+    concurrency:
+      group: publish-${{ inputs.dist_branch || 'dist' }}
+      cancel-in-progress: false
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -69,6 +73,8 @@ jobs:
           git config user.email "${SKILLS_PUBLISH_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
           # A force-push to the source branch would replace it with a build.
           [ "$DIST_BRANCH" != "$DEFAULT_BRANCH" ] || { echo "::error::dist_branch must not be $DEFAULT_BRANCH"; exit 1; }
+          # A branch build would take the live version number from the next merge.
+          [ "$DIST_BRANCH" != dist ] || [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] || { echo "::error::dist is published only from $DEFAULT_BRANCH"; exit 1; }
           git checkout -B "$DIST_BRANCH"
           # skills/ is gitignored in the source branch.
           git add -f skills .claude-plugin/plugin.json .codex-plugin/plugin.json
