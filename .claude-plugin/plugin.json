@@ -1,5 +1,5 @@
 {
   "name": "hacode-skills",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Скилы режимов работы агента (BUILD, CHECK, DOCS, UI, REVIEW, CLEANUP) поверх инструкций agent-toolkit."
 }
