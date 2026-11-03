@@ -1,0 +1,91 @@
+# skills/** в основной ветке не хранится - он собирается из modes/** и публикуется в ветку `dist`,
+# откуда плагин ставится по URL одной командой. Основная ветка остаётся источником, `dist` - сборкой.
+#
+# Публикация пишет в репозиторий, и токен для неё GitHub Actions выдаёт сам: `GITHUB_TOKEN`
+# с `permissions: contents: write` пушит в ветки того же репозитория, отдельный PAT не нужен.
+# Единственное ограничение - пуш от `GITHUB_TOKEN` не запускает новых workflow, поэтому по `dist`
+# пайплайн не побежит; проверок у ветки нет и не надо. Коммитера подписывают переменные
+# `SKILLS_PUBLISH_NAME` и `SKILLS_PUBLISH_EMAIL` (Settings → Secrets and variables → Actions →
+# Variables), без них коммитит `github-actions[bot]`. Подробности - CONTRIBUTING.md, «Ветка `dist`».
+
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the dist branch'
+        type: boolean
+        default: false
+      dist_branch:
+        description: 'Branch to publish to'
+        type: string
+        default: dist
+
+permissions:
+  contents: read
+
+jobs:
+  # Сборка ломается молча: `dist` уедет без скилов, а установка притащит пустой плагин.
+  # Поэтому собираем в каждом PR и на каждом пуше в основную ветку, а не только перед публикацией.
+  check-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: ./scripts/build-skills.py
+      - run: test -f skills/build/SKILL.md
+      - run: test -f skills/build/common.md
+      - run: python -m py_compile scripts/*.py scripts/mr_watch/*.py
+      - run: bash -n scripts/mr-reply.sh
+
+  # Скрипт не только описывает правила треда, но и отказывает по ним. Отказ - это поведение,
+  # и проверяется он на подменённом `glab`, без похода в GitLab. `jq` и `gawk` уже стоят
+  # на образе `ubuntu-latest`.
+  test-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet pytest pyyaml
+      - run: python -m pytest tests -q
+
+  publish-skills:
+    needs: [check-skills, test-scripts]
+    # Пуш в основную ветку публикует боевую `dist`; ручной запуск с галкой `publish` -
+    # способ проверить публикацию до мержа, а `dist_branch` уводит прогон на другую ветку.
+    if: github.event_name == 'push' || inputs.publish
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      DIST_BRANCH: ${{ inputs.dist_branch || 'dist' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Патч версии - число коммитов, shallow-клон его обрезает.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: ./scripts/build-skills.py --stamp-version
+      - run: |
+          git config user.name "${SKILLS_PUBLISH_NAME:-github-actions[bot]}"
+          git config user.email "${SKILLS_PUBLISH_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
+          # Ветка сборки - не история: она каждый раз переписывается поверх текущей основной ветки.
+          git checkout -B "$DIST_BRANCH"
+          # skills/ лежит в .gitignore - в сборке он нужен, поэтому добавляем принудительно.
+          git add -f skills .claude-plugin/plugin.json .codex-plugin/plugin.json
+          git commit --no-gpg-sign -m "Build skills from ${GITHUB_SHA::7}"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$DIST_BRANCH"
+        env:
+          SKILLS_PUBLISH_NAME: ${{ vars.SKILLS_PUBLISH_NAME }}
+          SKILLS_PUBLISH_EMAIL: ${{ vars.SKILLS_PUBLISH_EMAIL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
