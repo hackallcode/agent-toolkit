@@ -66,11 +66,11 @@ python -m pytest tests -q
 там обрезан, и версия поехала бы назад, поэтому джоба публикации клонирует историю целиком
 (`fetch-depth: 0`).
 
-Проверить публикацию до мержа: ручной запуск workflow с галкой `publish`, а вход `dist_branch`
-уводит прогон на другую ветку, чтобы не трогать боевую.
+Проверить публикацию до мержа: ручной запуск workflow с галкой `publish`, сборка уходит в ветку из входа
+`dist_branch` (по умолчанию `dist-test`). В `dist` публикуется только запуск с основной ветки.
 
 ```
-gh workflow run ci.yml --ref <ветка> -f publish=true -f dist_branch=dist-test
+gh workflow run ci.yml --ref <ветка> -f publish=true
 ```
 
 ### Токен публикации
